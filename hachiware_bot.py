@@ -97,4 +97,4 @@ def handle_ai_message(message):
 if __name__ == '__main__':
     print(f"Хачивара на посту! {premium_emoji_tag}💊")
     # Добавляем threaded=True, чтобы бот не зависал на одном запросе
-    bot.infinity_polling(timeout=10, long_polling_timeout=5, threaded=True)
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
