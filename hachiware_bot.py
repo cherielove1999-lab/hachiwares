@@ -1,19 +1,25 @@
 import telebot
 import random
 import os
-from openai import OpenAI # Используем библиотеку OpenAI для совместимости
+from openai import OpenAI
 
-# --- Настройки ---
+# --- Инициализация бота ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-
-# Настраиваем клиент для DeepSeek. Важно указать base_url.
-client = OpenAI(
-    api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com" 
-)
-
 bot = telebot.TeleBot(TOKEN)
+
+# --- Настройка клиента для OpenRouter ---
+# Ключ берём из переменной окружения (добавим его на Railway позже)
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+
+# Проверка, чтобы избежать ошибки 401 Unauthorized
+if not OPENROUTER_API_KEY:
+    raise ValueError("Не найден ключ OPENROUTER_API_KEY. Проверьте переменные на Railway.")
+
+# Создаём клиент, указывая адрес API OpenRouter
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
+)
 
 # 1. Сначала объявляем переменную с эмодзи
 premium_emoji_tag = '<tg-emoji emoji-id="5242553367737154940">🐱</tg-emoji>'
@@ -45,17 +51,14 @@ def send_welcome(message):
         parse_mode='HTML'
     )
 
-# Обработка текстовой фразы «сладкая пилюля» (ОСТАВЛЕН ТОЛЬКО ОДИН ОБРАБОТЧИК)
 @bot.message_handler(func=lambda message: message.text and 'сладкая пилюля' in message.text.lower())
 def handle_sweet_pill(message):
     bot.reply_to(message, random.choice(pill_phrases), parse_mode='HTML')
 
-# Обработка текстовой фразы «улыбка доктора»
 @bot.message_handler(func=lambda message: message.text and 'улыбка доктора' in message.text.lower())
 def handle_doctor_smile(message):
     bot.reply_to(message, random.choice(smile_phrases), parse_mode='HTML')
 
-# Дублирующие слэш-команды для удобства
 @bot.message_handler(commands=['pill'])
 def cmd_pill(message):
     bot.reply_to(message, random.choice(pill_phrases), parse_mode='HTML')
@@ -64,50 +67,34 @@ def cmd_pill(message):
 def cmd_smile(message):
     bot.reply_to(message, random.choice(smile_phrases), parse_mode='HTML')
 
-# --- НАЧАЛО КОДА ДЛЯ ИНЛАЙН-РЕЖИМА ---
-
-@bot.inline_handler(func=lambda query: len(query.query) > 0)
-def inline_query_text(query):
-    query_text = query.query.lower()
+# --- ИИ ОБРАБОТЧИК (СЮДА ВСТАВЛЕН ТОТ САМЫЙ КУСОК КОДА) ---
+# Этот обработчик ловит ВСЕ остальные текстовые сообщения
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_ai_message(message):
+    # Показываем статус "печатает..."
+    bot.send_chat_action(message.chat.id, 'typing')
     
-    # Если ввели наши стандартные фразы, отвечаем ими (это быстрее)
-    if 'сладкая пилюля' in query_text:
-        result_text = random.choice(pill_phrases)
-        title = "Сладкая пилюля от Хачивары 💊"
-    elif 'улыбка доктора' in query_text:
-        result_text = random.choice(smile_phrases)
-        title = f"Улыбка доктора Хачивары {premium_emoji_tag2}"
-    
-    # Если написали что-то другое, подключаем ИИ!
-    else:
-        try:
-            # Отправляем запрос в Gemini
-            # (Здесь используется переменная model, которую мы создали в прошлом шаге)
-            response = model.generate_content(query.query)
-            result_text = response.text
-            title = f"Ответ от Хачивары {premium_emoji_tag2}"
-        except Exception as e:
-            print(f"Ошибка ИИ в инлайне: {e}")
-            result_text = f"Мяу... Мои кошачьи мозги перегрелись. {premium_emoji_tag} Попробуй еще раз!"
-            title = "Ошибка Хачивары 🐾"
-
-    # Создаем карточку для отправки
-    result = telebot.types.InlineQueryResultArticle(
-        id='1',
-        title=title,
-        description=result_text,
-        input_message_content=telebot.types.InputTextMessageContent(
-            message_text=result_text,
-            parse_mode='HTML' # Важно, чтобы работали ваши премиум-эмодзи!
+    try:
+        # ВОТ ОН, ЗАПРОС К OPENROUTER:
+              response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-exp:free",  # Бесплатная модель
+            messages=[
+                {"role": "system", "content": "Ты — Хачивара, милый и заботливый котик-доктор. Отвечай с любовью, эмодзи и заботой. Твоя цель — поднять настроение."},
+                {"role": "user", "content": message.text}
+            ],
+            max_tokens=500
         )
-    )
-    
-    bot.answer_inline_query(query.id, [result])
+        
+        # Отправляем ответ от нейросети
+        bot.reply_to(message, response.choices[0].message.content)
+        
+    except Exception as e:
+        # Если произошла ошибка (например, закончились лимиты), пишем в консоль и пользователю
+        print(f"Ошибка ИИ: {e}")
+        bot.reply_to(message, "Мяу... Мои кошачьи мозги перегрелись, пока я думал над ответом. 🐾 Попробуй еще раз чуть позже!")
 
-# --- КОНЕЦ КОДА ДЛЯ ИНЛАЙН-РЕЖИМА ---
-
-# Запуск бота
+# --- ЗАПУСК ---
 if __name__ == '__main__':
-    # В консоль лучше выводить обычный эмодзи, так как HTML-теги там не работают
-    print("Хачивара на посту! 🐱💊") 
-    bot.infinity_polling()
+    print(f"Хачивара на посту! {premium_emoji_tag}💊")
+    # Добавляем threaded=True, чтобы бот не зависал на одном запросе
+    bot.infinity_polling(timeout=10, long_polling_timeout=5, threaded=True)
