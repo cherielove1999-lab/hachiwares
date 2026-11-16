@@ -1,1 +1,1 @@
-worker: python hachiwara_bot.py
+worker: python hachiware_bot.py
