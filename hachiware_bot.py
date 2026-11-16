@@ -1,12 +1,19 @@
 import telebot
 import random
-import os  # <--- Добавляем эту библиотеку
+import os
+from openai import OpenAI # Используем библиотеку OpenAI для совместимости
 
-# Бот будет брать токен из настроек Railway, а не из кода
-TOKEN = os.environ.get("TELEGRAM_TOKEN") 
+# --- Настройки ---
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+
+# Настраиваем клиент для DeepSeek. Важно указать base_url.
+client = OpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com" 
+)
+
 bot = telebot.TeleBot(TOKEN)
-
-# ... дальше идет ВЕСЬ ВАШ ОСТАЛЬНОЙ КОД (фразы, обработчики и т.д.) ...
 
 # 1. Сначала объявляем переменную с эмодзи
 premium_emoji_tag = '<tg-emoji emoji-id="5242553367737154940">🐱</tg-emoji>'
@@ -63,23 +70,35 @@ def cmd_smile(message):
 def inline_query_text(query):
     query_text = query.query.lower()
     
+    # Если ввели наши стандартные фразы, отвечаем ими (это быстрее)
     if 'сладкая пилюля' in query_text:
         result_text = random.choice(pill_phrases)
         title = "Сладкая пилюля от Хачивары 💊"
     elif 'улыбка доктора' in query_text:
         result_text = random.choice(smile_phrases)
         title = f"Улыбка доктора Хачивары {premium_emoji_tag2}"
+    
+    # Если написали что-то другое, подключаем ИИ!
     else:
-        result_text = f"Хачивара не знает такой команды, мяу! {premium_emoji_tag} Попробуй написать «сладкая пилюля» или «улыбка доктора»."
-        title = "Подсказка от Хачивары 🐾"
+        try:
+            # Отправляем запрос в Gemini
+            # (Здесь используется переменная model, которую мы создали в прошлом шаге)
+            response = model.generate_content(query.query)
+            result_text = response.text
+            title = f"Ответ от Хачивары {premium_emoji_tag2}"
+        except Exception as e:
+            print(f"Ошибка ИИ в инлайне: {e}")
+            result_text = f"Мяу... Мои кошачьи мозги перегрелись. {premium_emoji_tag} Попробуй еще раз!"
+            title = "Ошибка Хачивары 🐾"
 
+    # Создаем карточку для отправки
     result = telebot.types.InlineQueryResultArticle(
         id='1',
         title=title,
         description=result_text,
         input_message_content=telebot.types.InputTextMessageContent(
             message_text=result_text,
-            parse_mode='HTML' # Обязательно для инлайн-режима
+            parse_mode='HTML' # Важно, чтобы работали ваши премиум-эмодзи!
         )
     )
     
