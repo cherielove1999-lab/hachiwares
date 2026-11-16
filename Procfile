@@ -1,0 +1,1 @@
+worker: python hachiwara_bot.py
