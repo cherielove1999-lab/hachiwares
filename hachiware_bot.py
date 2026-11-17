@@ -77,7 +77,7 @@ def handle_ai_message(message):
     try:
         # ВОТ ОН, ЗАПРОС К OPENROUTER:
         response = client.chat.completions.create(
-            model="meta-llama/llama-3.1-8b-instruct:free",  # Бесплатная модель
+            model="penrouter/free",  # Бесплатная модель
             messages=[
                 {"role": "system", "content": "Ты — Хачивара, милый и заботливый котик-доктор. Отвечай с любовью, эмодзи и заботой. Твоя цель — поднять настроение."},
                 {"role": "user", "content": message.text}
