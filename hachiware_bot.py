@@ -71,27 +71,28 @@ def cmd_smile(message):
 # Этот обработчик ловит ВСЕ остальные текстовые сообщения
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_ai_message(message):
-    # Показываем статус "печатает..."
     bot.send_chat_action(message.chat.id, 'typing')
     
+    # Читаем характер из отдельного файла
     try:
-        # ВОТ ОН, ЗАПРОС К OPENROUTER:
+        with open('prompt.txt', 'r', encoding='utf-8') as file:
+            system_prompt = file.read()
+    except FileNotFoundError:
+        system_prompt = "Ты — Хачивара, милый котик-доктор." # Запасной вариант
+
+    try:
         response = client.chat.completions.create(
-            model="nvidia/nemotron-3-ultra-550b-a55b:free",  # Бесплатная модель
+            model="nvidia/nemotron-3-ultra-550b-a55b:free", # Ваша модель
             messages=[
-                {"role": "system", "content": "Ты — Хачивара, милый и заботливый котик-доктор. Отвечай с любовью, эмодзи и заботой. Твоя цель — поднять настроение."},
+                {"role": "system", "content": system_prompt}, # <--- Подставляем текст из файла
                 {"role": "user", "content": message.text}
             ],
             max_tokens=500
         )
-        
-        # Отправляем ответ от нейросети
         bot.reply_to(message, response.choices[0].message.content)
-        
     except Exception as e:
-        # Если произошла ошибка (например, закончились лимиты), пишем в консоль и пользователю
         print(f"Ошибка ИИ: {e}")
-        bot.reply_to(message, "Мяу... Мои кошачьи мозги перегрелись, пока я думал над ответом. 🐾 Попробуй еще раз чуть позже!")
+        bot.reply_to(message, "Мяу... Мои кошачьи мозги перегрелись. 🐾")
 
 # --- ЗАПУСК ---
 if __name__ == '__main__':
